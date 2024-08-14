@@ -1,0 +1,67 @@
+---
+updated: 2024-08-13
+category: 🔐 Zero Trust
+difficulty: Advanced
+pcx_content_type: tutorial
+content_type: 📝 Tutorial
+title: Augment Clouflare Access SSO capabilities with Cloudflare Workers
+---
+
+## Introduction
+
+This tutorial will walk you through extending the single-sign-on (SSO) capabilities of Cloudflare Access with Serverless. Specifically, this guide will demonstrate how to modify requests sent to your secured origin to include additional information from the Cloudflare Access authentication event.
+
+## Cloudflare Access authentication flow
+
+Cloudflare Access is an authentication proxy in charge of authenticating and authorization users for your exposed app before they reach it. When anthentication and authorization steps are successful, Cloudflare will insert a JWT inside the request before it reaches the origin. That is the standard flow and that JWT can then be [verifed on the origin side](https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/#validate-jwts). 
+
+![extendedflow](~/assets/images/cloudflare-one/applications/access-standard-flow.png)
+
+Sometimes, it is necessary to modify the request or overload it with some extra information coming from that authentication event. Cloudflare Workers is a perfect fit for that task and we'll see in this tutorial how to make that happen.
+
+![standardflow](~/assets/images/cloudflare-one/applications/access-extended-flow-serverless.png)
+
+:::note
+
+This example shows how workers is running right after Access and is in charge of inserting new request headers: **risk_score** and **disk_encrypted**
+
+The posture element serves as a prime example in this article, but the use and application of that concept extends far beyond that. You can indeed modify the request or overload it with anything Clouflare Access is collecting from the authentication event the user has passed before reaching the application.
+
+:::
+
+
+## Before you begin
+
+
+Make sure your account have:
+
+* An active subscription for [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) (Zero-trust)
+* An active [Workers](https://developers.cloudflare.com/workers/#cloudflare-workers) plan
+* An active [self-hosted](https://developers.cloudflare.com/cloudflare-one/applications/configure-apps/self-hosted-apps/#add-a-self-hosted-application) application exposed with an active authentication and authorization policy
+
+
+## Create a new workers script that will be in charge of expanding 
+
+
+1. In [Zero Trust](https://one.dash.cloudflare.com/), go to **Gateway** > **Egress Policies**.
+
+2. Select **Add a policy**.
+
+3. Name your policy, then add conditions to check users are configured in Microsoft Entra ID. For example, you can check for [identity conditions](/cloudflare-one/policies/gateway/identity-selectors/):
+
+   | Selector         | Operator | Value                                         |
+   | ---------------- | -------- | --------------------------------------------- |
+   | User Group Names | in       | `Sales and Marketing`, `Retail`, `U.S. Sales` |
+
+   Additionally, you can check for [device posture conditions](/cloudflare-one/identity/devices/):
+
+   | Selector                    | Operator | Value                                             | Logic |
+   | --------------------------- | -------- | ------------------------------------------------- | ----- |
+   | Passed Device Posture Check | is       | `CrowdStrike Overall ZTA score (Crowdstrike s2s)` | And   |
+   | Passed Device Posture Check | is       | `AppCheckMac - Required Software (Application)`   |       |
+
+4. Enable **Use dedicated Cloudflare egress IPs**. Select your desired IPv4 and IPv6 addresses. For example:
+
+   | Primary IPv4 address | IPv6 address    |
+   | -------------------- | --------------- |
+   | `203.0.113.0`        | `2001:db8::/32` |
